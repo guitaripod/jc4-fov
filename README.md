@@ -1,33 +1,30 @@
-# FovAlways110 (Just Cause 4)
+# JC4 FOV
 
-Just Cause 4 has no field-of-view option and its cameras sit at a very tight 50°. This sets every gameplay camera to 110° (or any value you pass) by patching the camera defaults inside `JustCause4.exe`.
+Just Cause 4 has no field-of-view option; it renders at roughly 52° vertical in gameplay (~82° horizontal at 16:9). This sets the vertical FOV to whatever you ask for — 130° by default — by intercepting the engine's perspective matrices at runtime.
 
-## Why patch the executable
+## How it works
 
-The camera entities in `rico.epe` do carry an `FOV` property, and the engine does read it — but it is only the initial value, overwritten from the camera framing system on the next update, so a dropzone data mod has no visible effect. The framing parameters themselves ship in no data file at all: they live in the ADF type library `CameraSettings.adf`, which is embedded in the executable, as the default values of `SphericalCoordinateFramingParams` (on foot, wingsuit, parachute, grapple, everything third person), `OffsetVectorFramingParams` and `GenericVehicleCamera`. Those defaults are the only place the FOV exists, so that is what this patches.
+The FOV is not authored anywhere you can reach from the outside. The `FOV` property on the camera entities in `rico.epe` is read at entity load but immediately overwritten by the camera framing system; the `CameraSettings.adf` type library baked into `JustCause4.exe` and the hardcoded 50° constructor immediates have no effect on the rendered image either — patching all of them to 200 changes nothing on screen.
 
-## Use
+What does work is the last common choke point. Every camera's projection goes through one 4×4 matrix multiply (`JustCause4.exe+0x75100`, a thunk to the real routine). This mod proxies `oo2core_7_win64.dll`, redirects that thunk, and on each call checks whether either operand is a perspective projection — no shear terms, `w` taken from `z` — and if so rewrites `m00`/`m11` for the requested FOV, preserving the aspect ratio. UI and other passes are untouched because their matrices do not match.
+
+## Install
 
 ```
-python3 tools/jc4_fov.py --game "<path to Just Cause 4>" --fov 110
+./build.sh
+cd "<Just Cause 4>"
+mv oo2core_7_win64.dll oo2core_7_win64_real.dll
+cp <this repo>/oo2core_7_win64.dll .
+echo 130 > jc4_fov.txt
 ```
 
-- The original executable is copied to `JustCause4.exe.orig` on the first run.
-- `--show` prints the current values, `--revert` restores the backup.
-- Steam's *Verify integrity of game files* also restores the stock executable.
-- The patch refuses to run if the values are not the stock 50 / 45 / 45 / 60, so it cannot be applied twice or to an unexpected build.
+The proxy forwards all 46 Oodle exports to `oo2core_7_win64_real.dll`, so decompression is unaffected. `jc4_fov.txt` holds the vertical FOV in degrees (1–179) and is read once at startup; `jc4_fov.log` records the hook result and the first few matrices it rewrote.
 
-Values written (all set to the requested FOV in degrees):
+At 16:9, vertical 130° is about 154° horizontal. Stock is ~52° vertical / 82° horizontal.
 
-| Field | Stock | Cameras it drives |
-| --- | --- | --- |
-| `SphericalCoordinateFramingParams.FOV` | 50 | third-person gameplay cameras |
-| `OffsetVectorFramingParams.FOV` | 45 | offset-framed cameras |
-| `GenericVehicleCamera.FOV[0..1]` | 45, 60 | vehicle cameras (speed-blended range) |
+## Uninstall
 
-## Notes
-
-Aiming and scope zoom stay relative: the game applies `FOVZoomAdjustment` on top of the camera FOV, so aiming still narrows the view from the wider base. Cutscenes use their own cameras and are untouched.
+Delete `oo2core_7_win64.dll` and rename `oo2core_7_win64_real.dll` back. Steam's *Verify integrity of game files* also restores the stock Oodle DLL, which disables the mod.
 
 ## License
 
