@@ -14,7 +14,7 @@ permissions:
 
 env:
   NEXUS_MOD_ID: "11446087843869"
-  NEXUS_FILE_ID: "55"
+  NEXUS_FILE_ID: "11446087843895"
 
 jobs:
   release:
