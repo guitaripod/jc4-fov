@@ -3,50 +3,49 @@
 #include <math.h>
 #include <stdint.h>
 
-#define MATRIX_MULTIPLY_THUNK_RVA 0x75100ULL
+#define VIEW_SETUP_THUNK_RVA 0x753F0ULL
 #define JUMP_INSTRUCTION_SIZE 5
-#define DEFAULT_FOV 130.0
+#define VIEW_FOV_OFFSET 0x588
+#define VIEW_ASPECT_OFFSET 0x5A4
+#define DEFAULT_FOV 100.0
 #define STUB_SIZE 64
+#define MIN_SCREEN_ASPECT 1.1f
+#define MAX_SCREEN_ASPECT 4.0f
+#define MIN_SANE_FOV_RADIANS 0.05f
+#define MAX_SANE_FOV_RADIANS 3.0f
+#define LOGGED_SAMPLES 4
+#define DEGREES_PER_RADIAN 57.295779513
 
 static FILE* g_log;
-static float g_target_tan;
-static void (*g_multiply)(float*, float*, float*);
-static LONG g_reported;
+static float g_target_radians;
+static void (*g_view_setup)(unsigned char*);
+static LONG g_seen;
 
-#define MIN_SCREEN_ASPECT 1.2f
-#define MAX_SCREEN_ASPECT 3.0f
-
-/// True for a perspective projection matrix: no shear, and w is taken from z.
-static int is_projection(const float* m) {
-    return m[1] == 0 && m[2] == 0 && m[3] == 0 && m[4] == 0 && m[6] == 0 && m[7] == 0 &&
-           m[8] == 0 && m[9] == 0 && m[12] == 0 && m[13] == 0 && m[15] == 0 &&
-           (m[11] == 1.0f || m[11] == -1.0f) && m[0] > 0.05f && m[5] > 0.05f;
-}
-
-/// Screen-shaped projections are the view cameras; square ones are cubemap and shadow passes.
-static int is_screen_camera(const float* m) {
-    float aspect = m[5] / m[0];
+/// Cubemap and shadow views are square or orthographic; only screen shaped views show the player's camera.
+static int is_screen_view(float aspect) {
     return aspect >= MIN_SCREEN_ASPECT && aspect <= MAX_SCREEN_ASPECT;
 }
 
-/// Rewrites a projection to the configured vertical FOV, keeping its aspect ratio.
-static void widen(float* m) {
-    float want = 1.0f / g_target_tan;
-    if (fabsf(m[5] - want) < 0.0005f) return;
-    float aspect = m[5] / m[0];
-    if (InterlockedIncrement(&g_reported) <= 3) {
-        fprintf(g_log, "projection vfov %.2f -> %.2f (aspect %.3f)\n",
-                2.0 * atan(1.0 / m[5]) * 57.29578, 2.0 * atan(g_target_tan) * 57.29578, aspect);
-        fflush(g_log);
-    }
-    m[5] = want;
-    m[0] = want / aspect;
+static int is_sane_fov(float radians) {
+    return radians > MIN_SANE_FOV_RADIANS && radians < MAX_SANE_FOV_RADIANS;
 }
 
-static void hook_multiply(float* a, float* b, float* out) {
-    if (is_projection(a) && is_screen_camera(a)) widen(a);
-    if (is_projection(b) && is_screen_camera(b)) widen(b);
-    g_multiply(a, b, out);
+static void log_sample(float aspect, float stock_radians) {
+    fprintf(g_log, "view aspect %.3f: vertical fov %.2f -> %.2f\n", aspect,
+            stock_radians * DEGREES_PER_RADIAN, g_target_radians * DEGREES_PER_RADIAN);
+    fflush(g_log);
+}
+
+/// Sets the field of view on the render view itself, before the engine builds its
+/// projection matrix and the frustum rays the sky and volumetric clouds march along.
+static void hook_view_setup(unsigned char* view) {
+    float* fov = (float*)(view + VIEW_FOV_OFFSET);
+    float aspect = *(const float*)(view + VIEW_ASPECT_OFFSET);
+    if (is_screen_view(aspect) && is_sane_fov(*fov)) {
+        if (InterlockedIncrement(&g_seen) <= LOGGED_SAMPLES) log_sample(aspect, *fov);
+        *fov = g_target_radians;
+    }
+    g_view_setup(view);
 }
 
 /// Reserves executable memory below `anchor` so a 32 bit relative jump can reach it.
@@ -69,15 +68,15 @@ static double read_configured_fov(void) {
     return fov;
 }
 
-/// Redirects the engine's 4x4 matrix multiply through hook_multiply.
+/// Redirects the engine's render view setup through hook_view_setup.
 static int install_hook(void) {
     uintptr_t base = (uintptr_t)GetModuleHandleA(NULL);
-    unsigned char* thunk = (unsigned char*)(base + MATRIX_MULTIPLY_THUNK_RVA);
+    unsigned char* thunk = (unsigned char*)(base + VIEW_SETUP_THUNK_RVA);
     if (thunk[0] != 0xE9) {
         fprintf(g_log, "thunk signature mismatch (%02x) - unsupported game build\n", thunk[0]);
         return 0;
     }
-    g_multiply = (void*)(thunk + JUMP_INSTRUCTION_SIZE + *(int32_t*)(thunk + 1));
+    g_view_setup = (void*)(thunk + JUMP_INSTRUCTION_SIZE + *(int32_t*)(thunk + 1));
     unsigned char* stub = alloc_stub_near((uintptr_t)thunk);
     if (!stub) {
         fprintf(g_log, "no executable memory in jump range\n");
@@ -85,7 +84,7 @@ static int install_hook(void) {
     }
     stub[0] = 0x48;
     stub[1] = 0xB8;
-    *(void**)(stub + 2) = (void*)hook_multiply;
+    *(void**)(stub + 2) = (void*)hook_view_setup;
     stub[10] = 0xFF;
     stub[11] = 0xE0;
 
@@ -94,7 +93,7 @@ static int install_hook(void) {
     *(int32_t*)(thunk + 1) = (int32_t)((intptr_t)stub - (intptr_t)(thunk + JUMP_INSTRUCTION_SIZE));
     VirtualProtect(thunk, JUMP_INSTRUCTION_SIZE, old, &old);
     FlushInstructionCache(GetCurrentProcess(), thunk, JUMP_INSTRUCTION_SIZE);
-    fprintf(g_log, "hooked matrix multiply at %p\n", (void*)g_multiply);
+    fprintf(g_log, "hooked render view setup at %p\n", (void*)g_view_setup);
     return 1;
 }
 
@@ -103,7 +102,7 @@ static DWORD WINAPI worker(LPVOID unused) {
     g_log = fopen("jc4_fov.log", "w");
     if (!g_log) return 0;
     double fov = read_configured_fov();
-    g_target_tan = (float)tan(fov * 3.14159265358979 / 360.0);
+    g_target_radians = (float)(fov / DEGREES_PER_RADIAN);
     fprintf(g_log, "target vertical fov %.1f degrees\n", fov);
     install_hook();
     fflush(g_log);

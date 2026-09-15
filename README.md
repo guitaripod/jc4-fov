@@ -17,9 +17,11 @@ Uninstall with `uninstall.bat` or `./jc4fov.sh uninstall`.
 
 ## How it works
 
-The FOV is not reachable through the game's data. The `FOV` property on the camera entities in `rico.epe` is read at entity load and immediately overwritten by the camera framing system; the `CameraSettings.adf` type library baked into `JustCause4.exe` and the hardcoded 50° constructor immediates never reach the renderer — patched to 200, the image is unchanged.
+The FOV is not reachable through the game's data. The `FOV` property on the camera entities in `rico.epe` is read at entity load and immediately overwritten by the camera framing system; the `CameraSettings.adf` type library baked into `JustCause4.exe` and the hardcoded constructor immediates never reach the renderer — patched to 200, the image is unchanged.
 
-Every camera's projection does go through one 4×4 matrix multiply (`JustCause4.exe+0x75100`, a thunk to the real routine). This mod proxies `oo2core_7_win64.dll`, forwards all 46 Oodle exports to the renamed original, redirects that thunk, and on each call checks whether an operand is a perspective projection — no shear terms, `w` taken from `z`, screen-shaped aspect — and if so rewrites `m00`/`m11` for the requested FOV. UI, shadow and cubemap passes do not match and are left alone.
+What does reach the renderer is one float on the render view. `JustCause4.exe+0x753F0` thunks to the routine that prepares a view for rendering: it reads the vertical FOV in radians from `view+0x588` and the aspect ratio from `view+0x5A4`, builds the projection into `view+0x294` — symmetric, off-centre when the frame is jittered, orthographic for shadow cascades — and then derives the frustum from that same field again.
+
+This mod proxies `oo2core_7_win64.dll`, forwards all 46 Oodle exports to the renamed original, redirects that thunk, and writes the requested FOV into `view+0x588` before the engine reads it. Projection, frustum and the view rays that the sky and volumetric cloud passes march along all come from that one number, so they stay consistent — rewriting the projection matrix further downstream does not, which leaves the sky drawn at the stock FOV and sliding against the world. Square and orthographic views — cubemap captures, shadow cascades — keep their own FOV.
 
 ## Build
 

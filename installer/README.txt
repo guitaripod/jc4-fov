@@ -52,11 +52,13 @@ HOW IT WORKS
 ------------
 The game's own FOV values cannot be reached from the outside: the FOV property
 on the camera entities is overwritten by the camera framing system every update,
-and the values baked into the executable never reach the renderer. Every
-camera's projection does pass through one 4x4 matrix multiply, so the mod
-proxies oo2core_7_win64.dll (all Oodle calls are forwarded to the renamed
-original), redirects that multiply, and rewrites any perspective matrix to the
-FOV you asked for, keeping the aspect ratio. UI and shadow passes are untouched.
+and the values baked into the executable never reach the renderer. What the
+renderer does read is a single field on each render view, so the mod proxies
+oo2core_7_win64.dll (all Oodle calls are forwarded to the renamed original),
+redirects the engine's view setup routine, and writes your FOV into that field
+before the engine builds anything from it. The projection, the frustum and the
+rays the sky and cloud passes use all come from that one value, so the whole
+image stays consistent. Cubemap captures and shadow cascades keep their own FOV.
 
 jc4_fov.log in the game folder records whether the hook installed.
 

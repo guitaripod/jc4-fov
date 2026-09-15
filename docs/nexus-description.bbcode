@@ -39,7 +39,7 @@ Double click [b]uninstall.bat[/b], or on Linux [code]./jc4fov.sh uninstall[/code
 
 The FOV cannot be reached through the game's data: the [i]FOV[/i] property on the camera entities is read at load and immediately overwritten by the camera framing system, and the values baked into the executable never reach the renderer — patching every one of them to 200 changes nothing on screen.
 
-Every camera's projection does pass through a single 4×4 matrix multiply. The mod proxies [i]oo2core_7_win64.dll[/i] — forwarding all Oodle calls to the renamed original, so decompression is untouched — redirects that multiply, and rewrites any perspective matrix to the configured FOV while keeping the aspect ratio. UI, shadow and cubemap passes do not match the perspective signature and are left alone.
+What the renderer does read is a single field on each render view. The mod proxies [i]oo2core_7_win64.dll[/i] — forwarding all Oodle calls to the renamed original, so decompression is untouched — redirects the engine's view setup routine, and writes your FOV into that field before the engine builds anything from it. The projection, the frustum and the view rays that the sky and the volumetric clouds are drawn along all come from that one number, so the whole image stays consistent. Cubemap captures and shadow cascades keep their own FOV.
 
 [i]jc4_fov.log[/i] in the game folder records whether the hook installed.
 
