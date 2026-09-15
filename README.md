@@ -1,48 +1,33 @@
 # FovAlways110 (Just Cause 4)
 
-Dropzone mod that sets every player camera in Just Cause 4 to a 110° field of view instead of the stock 50°. No DLL, no injection, no trainer — it replaces the camera entity data the engine already loads, so the value is fixed from the moment the game boots and never drifts.
+Just Cause 4 has no field-of-view option and its cameras sit at a very tight 50°. This sets every gameplay camera to 110° (or any value you pass) by patching the camera defaults inside `JustCause4.exe`.
 
-## Why
+## Why patch the executable
 
-Just Cause 4 ships without an FOV option and the only public alternative is a Cheat Engine table, which has to be re-attached every launch and does not survive under Proton/Wine. Every camera in the game is defined in `rico.epe` with `FOV = 50`, so the clean fix is to edit that value at the source.
+The camera entities in `rico.epe` do carry an `FOV` property, and the engine does read it — but it is only the initial value, overwritten from the camera framing system on the next update, so a dropzone data mod has no visible effect. The framing parameters themselves ship in no data file at all: they live in the ADF type library `CameraSettings.adf`, which is embedded in the executable, as the default values of `SphericalCoordinateFramingParams` (on foot, wingsuit, parachute, grapple, everything third person), `OffsetVectorFramingParams` and `GenericVehicleCamera`. Those defaults are the only place the FOV exists, so that is what this patches.
 
-## Install
-
-1. Copy the `dropzone` folder into your Just Cause 4 install directory, next to `JustCause4.exe`.
-2. Add the VFS arguments to the game's launch options so the engine mounts `dropzone` ahead of the archives (Steam: right click → Properties → Launch Options), keeping `%command%` first:
+## Use
 
 ```
-%command% --vfs-fs dropzone --vfs-archive archives_win64/boot_patch --vfs-archive archives_win64/boot_patch/eng --vfs-archive archives_win64/boot --vfs-archive archives_win64/boot/hires --vfs-archive archives_win64/main_patch --vfs-archive archives_win64/main_patch/hires --vfs-archive archives_win64/main_patch/eng --vfs-archive archives_win64/main --vfs-archive archives_win64/main/hires --vfs-archive archives_win64/main/eng --vfs-fs .
+python3 tools/jc4_fov.py --game "<path to Just Cause 4>" --fov 110
 ```
 
-Add a `--vfs-archive archives_win64/<pack>` and `--vfs-archive archives_win64/<pack>/hires` line for each DLC pack you own (`cp_deathstalker`, `cp_digitaldeluxe`, `cp_neonracer`, `cp_renegade`, …) before the final `--vfs-fs .`, or the game will boot without that content. Non-English installs use their own language folder in place of `eng`.
+- The original executable is copied to `JustCause4.exe.orig` on the first run.
+- `--show` prints the current values, `--revert` restores the backup.
+- Steam's *Verify integrity of game files* also restores the stock executable.
+- The patch refuses to run if the values are not the stock 50 / 45 / 45 / 60, so it cannot be applied twice or to an unexpected build.
 
-To uninstall, delete the `dropzone` folder.
+Values written (all set to the requested FOV in degrees):
 
-## What it changes
+| Field | Stock | Cameras it drives |
+| --- | --- | --- |
+| `SphericalCoordinateFramingParams.FOV` | 50 | third-person gameplay cameras |
+| `OffsetVectorFramingParams.FOV` | 45 | offset-framed cameras |
+| `GenericVehicleCamera.FOV[0..1]` | 45, 60 | vehicle cameras (speed-blended range) |
 
-| File | Cameras |
-| --- | --- |
-| `editor/entities/characters/main_characters/rico.epe` | 56 — on foot, wingsuit, parachute, grapple, hoverboard, vehicles, aiming, sniper, death, cutscene framing |
-| `editor/entities/weapons/03_mounted/…`, `04_stationary/…` | 8 — minigun, cannon, AA gun, mortar |
+## Notes
 
-Aim and zoom behaviour is untouched: the game applies its zoom adjustments relative to each camera's base FOV, so aiming still narrows the view, just from a wider starting point.
-
-## How it works
-
-Camera entities are RTPC property containers. Each camera node carries a float property `FOV` (Jenkins lookup3 hash `0xFCD59DA7`), which `JustCause4.exe` reads at entity load, multiplies by `0.01745329` (degrees → radians) and stores in the camera object. Every camera in the shipped data uses 50. This mod rewrites those floats in place — the file layout, size and every other property stay byte-identical — and the engine picks the patched file up because `--vfs-fs dropzone` is mounted ahead of the archives.
-
-## Rebuilding for a different FOV
-
-`tools/jc4_fov.py` regenerates `dropzone/` straight from your own installed copy:
-
-```
-x86_64-w64-mingw32-gcc -O2 -o tools/oodle_dec.exe tools/oodle_dec.c
-cp "<game>/oo2core_7_win64.dll" tools/
-python3 tools/jc4_fov.py --game "<game>" --fov 110
-```
-
-The helper is only needed to unpack Oodle-compressed archive entries; it calls the game's own `oo2core_7_win64.dll`, under Wine on Linux. Nothing is written to the game directory — copy the generated `dropzone` folder there yourself.
+Aiming and scope zoom stay relative: the game applies `FOVZoomAdjustment` on top of the camera FOV, so aiming still narrows the view from the wider base. Cutscenes use their own cameras and are untouched.
 
 ## License
 
