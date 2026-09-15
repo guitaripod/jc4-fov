@@ -6,6 +6,8 @@
 #define VIEW_SETUP_THUNK_RVA 0x753F0ULL
 #define JUMP_INSTRUCTION_SIZE 5
 #define VIEW_FOV_OFFSET 0x588
+#define VIEW_FOV_BLEND_FROM_OFFSET 0x580
+#define VIEW_FOV_BLEND_TO_OFFSET 0x584
 #define VIEW_ASPECT_OFFSET 0x5A4
 #define DEFAULT_FOV 100.0
 #define STUB_SIZE 64
@@ -36,6 +38,13 @@ static void log_sample(float aspect, float stock_radians) {
     fflush(g_log);
 }
 
+/// The engine eases the field of view between these two endpoints each frame, so
+/// pinning them as well keeps the next frame from blending back towards the stock value.
+static void pin_blend_endpoints(unsigned char* view) {
+    *(float*)(view + VIEW_FOV_BLEND_FROM_OFFSET) = g_target_radians;
+    *(float*)(view + VIEW_FOV_BLEND_TO_OFFSET) = g_target_radians;
+}
+
 /// Sets the field of view on the render view itself, before the engine builds its
 /// projection matrix and the frustum rays the sky and volumetric clouds march along.
 static void hook_view_setup(unsigned char* view) {
@@ -44,6 +53,7 @@ static void hook_view_setup(unsigned char* view) {
     if (is_screen_view(aspect) && is_sane_fov(*fov)) {
         if (InterlockedIncrement(&g_seen) <= LOGGED_SAMPLES) log_sample(aspect, *fov);
         *fov = g_target_radians;
+        pin_blend_endpoints(view);
     }
     g_view_setup(view);
 }
