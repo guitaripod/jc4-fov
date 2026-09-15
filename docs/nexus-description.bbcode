@@ -1,6 +1,6 @@
 [size=4][b]What it does[/b][/size]
 
-Just Cause 4 renders at roughly [b]52° vertical[/b] (82° horizontal at 16:9) and ships no field of view option. This mod sets the FOV to whatever you want — [b]100° vertical (≈139° horizontal)[/b] by default — and keeps it there, in every camera: on foot, wingsuit, parachute, grapple, hoverboard, vehicles and aiming.
+Just Cause 4 renders at roughly [b]52° vertical[/b] (82° horizontal at 16:9) and ships no field of view option. This mod sets the FOV to whatever you want, [b]100° vertical (≈139° horizontal)[/b] by default, and keeps it there, in every camera: on foot, wingsuit, parachute, grapple, hoverboard, vehicles and aiming.
 
 No game files are modified. The mod only adds files, and it works on Windows and on Linux/Proton/Steam Deck.
 
@@ -9,7 +9,7 @@ No game files are modified. The mod only adds files, and it works on Windows and
 [b]Windows[/b]
 [list=1]
 [*]Extract the archive.
-[*]Copy [b]install.bat[/b], [b]uninstall.bat[/b], [b]oo2core_7_win64.dll[/b] and [b]jc4_fov.txt[/b] into your Just Cause 4 folder — the one with [i]JustCause4.exe[/i], usually [i]C:\Program Files (x86)\Steam\steamapps\common\Just Cause 4[/i].
+[*]Copy [b]install.bat[/b], [b]uninstall.bat[/b], [b]oo2core_7_win64.dll[/b] and [b]jc4_fov.txt[/b] into your Just Cause 4 folder, the one with [i]JustCause4.exe[/i], usually [i]C:\Program Files (x86)\Steam\steamapps\common\Just Cause 4[/i].
 [*]Double click [b]install.bat[/b].
 [/list]
 
@@ -19,14 +19,14 @@ It finds the game in your Steam libraries by itself; pass the folder if it canno
 
 [size=4][b]Changing the FOV[/b][/size]
 
-Edit [b]jc4_fov.txt[/b] in the game folder: one number, the vertical field of view in degrees (1–179), read when the game starts. On Linux: [code]./jc4fov.sh fov 120[/code]
+Edit [b]jc4_fov.txt[/b] in the game folder: one number, the vertical field of view in degrees (1 to 179), read when the game starts. On Linux: [code]./jc4fov.sh fov 120[/code]
 
 [list]
-[*]vertical 50 — about stock — horizontal 79
-[*]vertical 75 — horizontal 106
-[*]vertical 90 — horizontal 121
-[*]vertical 100 — default — horizontal 139
-[*]vertical 130 — horizontal 154
+[*]vertical 50, about stock, horizontal 79
+[*]vertical 75, horizontal 106
+[*]vertical 90, horizontal 121
+[*]vertical 100 (default), horizontal 139
+[*]vertical 130, horizontal 154
 [/list]
 
 Above about 140 vertical the edges of the screen stretch noticeably.
@@ -37,9 +37,9 @@ Double click [b]uninstall.bat[/b], or on Linux [code]./jc4fov.sh uninstall[/code
 
 [size=4][b]How it works[/b][/size]
 
-The FOV cannot be reached through the game's data: the [i]FOV[/i] property on the camera entities is read at load and immediately overwritten by the camera framing system, and the values baked into the executable never reach the renderer — patching every one of them to 200 changes nothing on screen.
+The FOV cannot be reached through the game's data: the [i]FOV[/i] property on the camera entities is read at load and immediately overwritten by the camera framing system, and the values baked into the executable never reach the renderer. Patching every one of them to 200 changes nothing on screen.
 
-What the renderer does read is a single field on each render view. The mod proxies [i]oo2core_7_win64.dll[/i] — forwarding all Oodle calls to the renamed original, so decompression is untouched — redirects the engine's view setup routine, and writes your FOV into that field before the engine builds anything from it. The projection, the frustum and the view rays that the sky and the volumetric clouds are drawn along all come from that one number, so the whole image stays consistent. Cubemap captures and shadow cascades keep their own FOV.
+What the renderer does read is a single field on each render view. The mod proxies [i]oo2core_7_win64.dll[/i] (forwarding all Oodle calls to the renamed original, so decompression is untouched), redirects the engine's view setup routine, and writes your FOV into that field before the engine builds anything from it. The projection, the frustum and the view rays that the sky and the volumetric clouds are drawn along all come from that one number, so the whole image stays consistent. Cubemap captures and shadow cascades keep their own FOV.
 
 [i]jc4_fov.log[/i] in the game folder records whether the hook installed.
 
