@@ -1,30 +1,42 @@
 # JC4 FOV
 
-Just Cause 4 has no field-of-view option; it renders at roughly 52° vertical in gameplay (~82° horizontal at 16:9). This sets the vertical FOV to whatever you ask for — 130° by default — by intercepting the engine's perspective matrices at runtime.
+Field of view mod for Just Cause 4. The game renders at roughly 52° vertical (82° horizontal at 16:9) and has no FOV option; this sets it to any value you want — 100° vertical by default — for every camera, without modifying a single game file.
 
-## How it works
-
-The FOV is not authored anywhere you can reach from the outside. The `FOV` property on the camera entities in `rico.epe` is read at entity load but immediately overwritten by the camera framing system; the `CameraSettings.adf` type library baked into `JustCause4.exe` and the hardcoded 50° constructor immediates have no effect on the rendered image either — patching all of them to 200 changes nothing on screen.
-
-What does work is the last common choke point. Every camera's projection goes through one 4×4 matrix multiply (`JustCause4.exe+0x75100`, a thunk to the real routine). This mod proxies `oo2core_7_win64.dll`, redirects that thunk, and on each call checks whether either operand is a perspective projection — no shear terms, `w` taken from `z` — and if so rewrites `m00`/`m11` for the requested FOV, preserving the aspect ratio. UI and other passes are untouched because their matrices do not match.
+[Nexus Mods page](https://www.nexusmods.com/justcause4/mods/29)
 
 ## Install
 
+Grab the archive from [releases](https://github.com/guitaripod/jc4-fov/releases), then:
+
+- **Windows** — copy its contents into the folder with `JustCause4.exe` and run `install.bat`
+- **Linux / Steam Deck** — `./jc4fov.sh install` (finds the game in your Steam libraries)
+
+Set the vertical FOV in `jc4_fov.txt` (1–179 degrees, read at game start), or `./jc4fov.sh fov 120`. At 16:9: 75 → 106° horizontal, 100 → 139°, 130 → 154°.
+
+Uninstall with `uninstall.bat` or `./jc4fov.sh uninstall`.
+
+## How it works
+
+The FOV is not reachable through the game's data. The `FOV` property on the camera entities in `rico.epe` is read at entity load and immediately overwritten by the camera framing system; the `CameraSettings.adf` type library baked into `JustCause4.exe` and the hardcoded 50° constructor immediates never reach the renderer — patched to 200, the image is unchanged.
+
+Every camera's projection does go through one 4×4 matrix multiply (`JustCause4.exe+0x75100`, a thunk to the real routine). This mod proxies `oo2core_7_win64.dll`, forwards all 46 Oodle exports to the renamed original, redirects that thunk, and on each call checks whether an operand is a perspective projection — no shear terms, `w` taken from `z`, screen-shaped aspect — and if so rewrites `m00`/`m11` for the requested FOV. UI, shadow and cubemap passes do not match and are left alone.
+
+## Build
+
 ```
-./build.sh
-cd "<Just Cause 4>"
-mv oo2core_7_win64.dll oo2core_7_win64_real.dll
-cp <this repo>/oo2core_7_win64.dll .
-echo 130 > jc4_fov.txt
+./build.sh              # oo2core_7_win64.dll, needs mingw-w64
+./package.sh 1.1.0      # dist/JC4-FovAlways-1.1.0.zip
 ```
 
-The proxy forwards all 46 Oodle exports to `oo2core_7_win64_real.dll`, so decompression is unaffected. `jc4_fov.txt` holds the vertical FOV in degrees (1–179) and is read once at startup; `jc4_fov.log` records the hook result and the first few matrices it rewrote.
+## Releasing
 
-At 16:9, vertical 130° is about 154° horizontal. Stock is ~52° vertical / 82° horizontal.
+Publishing a GitHub release builds the archive, attaches it, and uploads it to the Nexus mod page through the [official upload action](https://github.com/Nexus-Mods/upload-action) (`NEXUSMODS_API_KEY` repository secret, mod 29 / file 55). The release body becomes the Nexus changelog.
 
-## Uninstall
+```
+gh release create v1.2.0 --title "1.2.0" --notes "what changed"
+```
 
-Delete `oo2core_7_win64.dll` and rename `oo2core_7_win64_real.dll` back. Steam's *Verify integrity of game files* also restores the stock Oodle DLL, which disables the mod.
+`docs/nexus-description.bbcode` is the mod page description, kept in sync by hand — Nexus has no API for page text.
 
 ## License
 

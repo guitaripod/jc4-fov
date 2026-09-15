@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build and upload (e.g. 1.1.0)
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  NEXUS_MOD_ID: "11446087843869"
+  NEXUS_FILE_ID: "55"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install mingw-w64
+        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64 zip
+
+      - name: Resolve version
+        id: version
+        run: echo "value=${{ github.event.release.tag_name || inputs.version }}" | sed 's/=v/=/' >> "$GITHUB_OUTPUT"
+
+      - name: Build release archive
+        run: ./package.sh "${{ steps.version.outputs.value }}"
+
+      - name: Attach archive to the GitHub release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        with:
+          files: dist/JC4-FovAlways-${{ steps.version.outputs.value }}.zip
+
+      - name: Upload to Nexus Mods
+        uses: Nexus-Mods/upload-action@19da5c91527877cd0bfedc6e6239c911035846a0 # v1.0.0-beta.9
+        with:
+          api_key: ${{ secrets.NEXUSMODS_API_KEY }}
+          mod_id: ${{ env.NEXUS_MOD_ID }}
+          file_id: ${{ env.NEXUS_FILE_ID }}
+          filename: dist/JC4-FovAlways-${{ steps.version.outputs.value }}.zip
+          display_name: FovAlways ${{ steps.version.outputs.value }}
+          version: ${{ steps.version.outputs.value }}
+          category: main
+          description: Vertical FOV mod for Just Cause 4. Install with install.bat (Windows) or jc4fov.sh (Linux); set the value in jc4_fov.txt.
+          changelog: ${{ github.event.release.body || format('Release {0}', steps.version.outputs.value) }}
+          archive_existing_version: true
+          update_mod_version: true
+          allow_mod_manager_download: false

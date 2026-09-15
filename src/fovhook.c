@@ -13,11 +13,20 @@ static float g_target_tan;
 static void (*g_multiply)(float*, float*, float*);
 static LONG g_reported;
 
+#define MIN_SCREEN_ASPECT 1.2f
+#define MAX_SCREEN_ASPECT 3.0f
+
 /// True for a perspective projection matrix: no shear, and w is taken from z.
 static int is_projection(const float* m) {
     return m[1] == 0 && m[2] == 0 && m[3] == 0 && m[4] == 0 && m[6] == 0 && m[7] == 0 &&
            m[8] == 0 && m[9] == 0 && m[12] == 0 && m[13] == 0 && m[15] == 0 &&
            (m[11] == 1.0f || m[11] == -1.0f) && m[0] > 0.05f && m[5] > 0.05f;
+}
+
+/// Screen-shaped projections are the view cameras; square ones are cubemap and shadow passes.
+static int is_screen_camera(const float* m) {
+    float aspect = m[5] / m[0];
+    return aspect >= MIN_SCREEN_ASPECT && aspect <= MAX_SCREEN_ASPECT;
 }
 
 /// Rewrites a projection to the configured vertical FOV, keeping its aspect ratio.
@@ -35,8 +44,8 @@ static void widen(float* m) {
 }
 
 static void hook_multiply(float* a, float* b, float* out) {
-    if (is_projection(a)) widen(a);
-    if (is_projection(b)) widen(b);
+    if (is_projection(a) && is_screen_camera(a)) widen(a);
+    if (is_projection(b) && is_screen_camera(b)) widen(b);
     g_multiply(a, b, out);
 }
 
